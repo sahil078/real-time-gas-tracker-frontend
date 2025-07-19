@@ -19,7 +19,6 @@ export const useGasStore = create<AppState>((set, get) => ({
   usdPrice: 0,
   simulationAmount: "0.5",
   candlestickData: [],
-  isLoading: false,
 
   setMode: (mode) => set({ mode }),
 
@@ -38,7 +37,7 @@ export const useGasStore = create<AppState>((set, get) => ({
   addGasPoint: (chain, point) =>
     set((state) => {
       const chainData = state.chains[chain]
-      const newHistory = [...chainData.history, point].slice(-100)
+      const newHistory = [...chainData.history, point].slice(-100) // Keep last 100 points
 
       return {
         chains: {

@@ -31,7 +31,6 @@ export interface AppState {
   usdPrice: number
   simulationAmount: string
   candlestickData: CandlestickData[]
-  isLoading: boolean
   setMode: (mode: "live" | "simulation") => void
   updateChainData: (chain: keyof AppState["chains"], data: Partial<ChainData>) => void
   setUsdPrice: (price: number) => void
