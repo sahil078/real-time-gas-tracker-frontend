@@ -1,7 +1,8 @@
 import { create } from "zustand"
-import type { AppState } from "@/types"
+import { AppState ,ChainData , GasPoint } from "./type"
 
-const initialChainData = {
+// Initial data structure for each chain
+const initialChainData: ChainData = {
   baseFee: 0,
   priorityFee: 0,
   history: [],
@@ -11,45 +12,53 @@ const initialChainData = {
 
 export const useGasStore = create<AppState>((set, get) => ({
   mode: "live",
+
+  // Initialize each chain's state
   chains: {
     ethereum: { ...initialChainData },
     polygon: { ...initialChainData },
     arbitrum: { ...initialChainData },
   },
+
   usdPrice: 0,
   simulationAmount: "0.5",
   candlestickData: [],
 
-  setMode: (mode) => set({ mode }),
+  // Setters / Mutators
+  setMode: (mode: string) => set({ mode }),
 
-  updateChainData: (chain, data) =>
+  updateChainData: (chain: string, data: Partial<ChainData>) =>
     set((state) => ({
       chains: {
         ...state.chains,
-        [chain]: { ...state.chains[chain], ...data },
+        [chain]: {
+          ...state.chains[chain],
+          ...data,
+        },
       },
     })),
 
-  setUsdPrice: (usdPrice) => set({ usdPrice }),
+  setUsdPrice: (usdPrice: number) => set({ usdPrice }),
 
-  setSimulationAmount: (simulationAmount) => set({ simulationAmount }),
+  setSimulationAmount: (simulationAmount: string) => set({ simulationAmount }),
 
-  addGasPoint: (chain, point) =>
+  addGasPoint: (chain: string, point: GasPoint) =>
     set((state) => {
       const chainData = state.chains[chain]
-      const newHistory = [...chainData.history, point].slice(-100) // Keep last 100 points
+
+      const updatedHistory = [...chainData.history, point].slice(-100) // Keep last 100 points only
 
       return {
         chains: {
           ...state.chains,
           [chain]: {
             ...chainData,
-            history: newHistory,
+            history: updatedHistory,
             lastUpdate: Date.now(),
           },
         },
       }
     }),
 
-  updateCandlestickData: (candlestickData) => set({ candlestickData }),
+  updateCandlestickData: (candlestickData: any[]) => set({ candlestickData }),
 }))

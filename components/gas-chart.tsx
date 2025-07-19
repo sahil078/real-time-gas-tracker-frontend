@@ -1,87 +1,48 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { createChart, type IChartApi, type ISeriesApi } from "lightweight-charts"
+import { useMemo } from "react"
 import { useGasStore } from "@/lib/store"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CHAIN_CONFIGS } from "@/lib/chains"
 
-export function GasChart() {
-  const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<IChartApi | null>(null)
-  const seriesRefs = useRef<Record<string, ISeriesApi<"Line">>>({})
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  CartesianGrid,
+} from "recharts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type { ChainData, GasPoint } from "@/types"
 
-  const { chains } = useGasStore()
+// ✅ Utility to merge all chain data into unified time-based points
+function useMergedGasData(chains: Record<string, ChainData>) {
+  return useMemo(() => {
+    const timeMap: Record<number, any> = {}
 
-  useEffect(() => {
-    if (!chartContainerRef.current) return
-
-    // Create chart
-    const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
-      layout: {
-        background: { color: "transparent" },
-        textColor: "#d1d5db",
-      },
-      grid: {
-        vertLines: { color: "#374151" },
-        horzLines: { color: "#374151" },
-      },
-      rightPriceScale: {
-        borderColor: "#4b5563",
-      },
-      timeScale: {
-        borderColor: "#4b5563",
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    })
-
-    chartRef.current = chart
-
-    // Create series for each chain
-    Object.entries(CHAIN_CONFIGS).forEach(([chainKey, config]) => {
-      const series = chart.addLineSeries({
-        color: config.color,
-        lineWidth: 2,
-        title: config.name,
+    Object.entries(chains).forEach(([chainKey, chain]) => {
+      chain.history.forEach((point: GasPoint) => {
+        const timestamp = Math.floor(point.timestamp / 1000)
+        if (!timeMap[timestamp]) {
+          timeMap[timestamp] = {
+            time: new Date(timestamp * 1000).toLocaleTimeString(),
+          }
+        }
+        timeMap[timestamp][chainKey] = point.totalFee
       })
-      seriesRefs.current[chainKey] = series
     })
 
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        })
-      }
-    }
-
-    window.addEventListener("resize", handleResize)
-
-    return () => {
-      window.removeEventListener("resize", handleResize)
-      if (chartRef.current) {
-        chartRef.current.remove()
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    // Update chart data when gas data changes
-    Object.entries(chains).forEach(([chainKey, chainData]) => {
-      const series = seriesRefs.current[chainKey]
-      if (series && chainData.history.length > 0) {
-        const chartData = chainData.history.map((point) => ({
-          time: Math.floor(point.timestamp / 1000) as any,
-          value: point.totalFee,
-        }))
-        series.setData(chartData)
-      }
-    })
+    return Object.values(timeMap).sort((a, b) =>
+      a.time.localeCompare(b.time)
+    )
   }, [chains])
+}
+
+export function GasChart() {
+  const chains = useGasStore((state) => state.chains)
+  const data = useMergedGasData(chains)
 
   return (
     <Card>
@@ -90,14 +51,38 @@ export function GasChart() {
         <div className="flex gap-4 text-sm">
           {Object.entries(CHAIN_CONFIGS).map(([chainKey, config]) => (
             <div key={chainKey} className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: config.color }} />
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: config.color }}
+              />
               <span>{config.name}</span>
             </div>
           ))}
         </div>
       </CardHeader>
+
       <CardContent>
-        <div ref={chartContainerRef} className="w-full" />
+        <div className="w-full h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid stroke="#374151" />
+              <XAxis dataKey="time" stroke="#d1d5db" />
+              <YAxis stroke="#d1d5db" />
+              <Tooltip />
+              <Legend />
+              {Object.entries(CHAIN_CONFIGS).map(([chainKey, config]) => (
+                <Line
+                  key={chainKey}
+                  type="monotone"
+                  dataKey={chainKey}
+                  stroke={config.color}
+                  dot={false}
+                  strokeWidth={2}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   )
