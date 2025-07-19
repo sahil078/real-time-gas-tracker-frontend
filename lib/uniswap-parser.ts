@@ -1,40 +1,45 @@
-import { ethers } from "ethers"
+import { Log, Interface, formatUnits } from "ethers"
+import { type Log as EthersLog } from "ethers"
 
 export class UniswapV3Parser {
-  private static readonly SWAP_EVENT_SIGNATURE = "Swap(address,address,int256,int256,uint160,uint128,int24)"
+  // Swap event definition
+  private static readonly SWAP_EVENT_SIGNATURE =
+    "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)"
 
-  static parseSwapEvent(log: ethers.providers.Log): number | null {
+  // Interface for decoding logs
+  private static readonly iface = new Interface([UniswapV3Parser.SWAP_EVENT_SIGNATURE])
+
+  /**
+   * Parse Uniswap V3 Swap event and extract ETH/USDC price
+   */
+  static parseSwapEvent(log: EthersLog): number | null {
     try {
-      const iface = new ethers.utils.Interface([
-        "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)",
-      ])
+      const parsed = UniswapV3Parser.iface.parseLog(log)
+      if (!parsed) {
+        console.error("Parsed log is null");
+        return null;
+      }
+      const sqrtPriceX96 = parsed.args.sqrtPriceX96 as bigint;
 
-      const parsed = iface.parseLog(log)
-      const sqrtPriceX96 = parsed.args.sqrtPriceX96
-
-      // Calculate price from sqrtPriceX96
-      // price = (sqrtPriceX96**2 * 10**12) / (2**192)
-      const price = sqrtPriceX96.pow(2).mul(ethers.BigNumber.from(10).pow(12)).div(ethers.BigNumber.from(2).pow(192))
-
-      return Number.parseFloat(ethers.utils.formatUnits(price, 6)) // USDC has 6 decimals
-    } catch (error) {
-      console.error("Error parsing swap event:", error)
+      return this.calculateETHUSD(sqrtPriceX96)
+    } catch (err) {
+      console.error("Failed to parse swap log:", err)
       return null
     }
   }
 
-  static calculateETHUSD(sqrtPriceX96: ethers.BigNumber): number {
+  /**
+   * Convert sqrtPriceX96 to ETH/USDC price
+   */
+  static calculateETHUSD(sqrtPriceX96: bigint): number {
     try {
-      // Convert sqrtPriceX96 to actual price
-      const Q96 = ethers.BigNumber.from(2).pow(96)
-      const price = sqrtPriceX96.pow(2).div(Q96.pow(2))
+      const numerator = sqrtPriceX96 * sqrtPriceX96 * BigInt(10 ** 12)
+      const denominator = BigInt(Math.pow(2, 192))
+      const price = numerator / denominator
 
-      // Adjust for token decimals (ETH: 18, USDC: 6)
-      const adjustedPrice = price.mul(ethers.BigNumber.from(10).pow(12))
-
-      return Number.parseFloat(ethers.utils.formatEther(adjustedPrice))
-    } catch (error) {
-      console.error("Error calculating ETH/USD:", error)
+      return Number(price) / 1e6 // USDC has 6 decimals
+    } catch (err) {
+      console.error("Error calculating price:", err)
       return 0
     }
   }
